@@ -127,7 +127,8 @@ class DIC:
             # 自动的话就假设整像素位移为0
             # init_moved_xy = self.init_point[0:2]
             # init_moved_xy = self.find_point(self.init_point[0:2], '十字搜索')
-            init_moved_xy = self.find_point(self.init_point[0:2], 'traverse')
+            # init_moved_xy = self.find_point(self.init_point[0:2], 'traverse')
+            init_moved_xy = self.find_point(self.init_point[0:2], '粗细搜索')
             # init_moved_xy = self.find_point(self.init_point[0:2], '手动给定')
         else:
             init_moved_xy = self.find_point(self.init_point[0:2], 'traverse')
@@ -181,6 +182,56 @@ class DIC:
                 if flag:
                     break
 
+        elif method == '粗细搜索':
+            '''分三步，步长分别为4像素、2像素、1像素'''
+            subset_size = self.subset_size
+            half_subset = int((subset_size - 1) / 2)
+            ref_point = ref_point.astype('int64')
+
+            fSubset = ref_img[ref_point[0] - half_subset:ref_point[0] + half_subset + 1,
+                      ref_point[1] - half_subset:ref_point[1] + half_subset + 1]
+            deltafVec = fSubset - np.mean(fSubset)
+            deltaf = np.sqrt(np.sum(deltafVec ** 2))
+
+            sizeX = self.sizeX
+            sizeY = self.sizeY
+            x = np.arange(0, sizeX - subset_size + 1, 4) + subset_size // 2
+            y = np.arange(0, sizeY - subset_size + 1, 4) + subset_size // 2
+            X, Y = np.meshgrid(x, y)
+            # 所有位移后的点的坐标
+            all_xy = np.vstack((X.flatten('F'), Y.flatten('F'))).T.astype('int32')
+            Cznssd = np.zeros(len(all_xy))
+            for i in range(len(all_xy)):
+                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                                  all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
+                deltagVec = current_gSubset - np.mean(current_gSubset)
+                deltag = np.sqrt(np.sum(deltagVec ** 2))
+                Cznssd[i] = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
+
+            xy_1 = all_xy[np.nanargmin(Cznssd)]
+            all_xy = xy_1 + np.array([[-2, -2], [-2, 0], [-2, 2], [-0, -2], [-0, 0], [-0, 2], [2, -2], [2, 0], [2, 2]])
+
+            Cznssd = np.zeros(len(all_xy))
+            for i in range(len(all_xy)):
+                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                                  all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
+                deltagVec = current_gSubset - np.mean(current_gSubset)
+                deltag = np.sqrt(np.sum(deltagVec ** 2))
+                Cznssd[i] = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
+
+            xy_2 = all_xy[np.nanargmin(Cznssd)]
+            all_xy = xy_2 + np.array([[-1, -1], [-1, 0], [-1, 1], [-0, -1], [-0, 0], [-0, 1], [1, -1], [1, 0], [1, 1]])
+
+            Cznssd = np.zeros(len(all_xy))
+            for i in range(len(all_xy)):
+                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                                  all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
+                deltagVec = current_gSubset - np.mean(current_gSubset)
+                deltag = np.sqrt(np.sum(deltagVec ** 2))
+                Cznssd[i] = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
+
+            max_xy = all_xy[np.nanargmin(Cznssd)]
+
         elif method == 'GA':
             '''
             这个方法不是很靠谱
@@ -189,6 +240,9 @@ class DIC:
             sizeY = self.sizeY
             ref_point = ref_point.astype('int64')
             max_xy = find_point_GA.run(self.ref_img, self.tar_img, self.subset_size, ref_point, sizeX, sizeY)
+
+        elif method == 'GA-cross':
+            a=1
 
         elif method == '十字搜索':
             '''
