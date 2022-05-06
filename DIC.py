@@ -1,4 +1,5 @@
 import cv2 as cv
+import time
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -126,12 +127,18 @@ class DIC:
         if self.ifauto:
             # 自动的话就假设整像素位移为0
             # init_moved_xy = self.init_point[0:2]
-            # init_moved_xy = self.find_point(self.init_point[0:2], '十字搜索')
-            # init_moved_xy = self.find_point(self.init_point[0:2], 'traverse')
-            init_moved_xy = self.find_point(self.init_point[0:2], '粗细搜索')
+            start = time.perf_counter()
+            # init_moved_xy = self.find_point(self.init_point[0:2], 'GA')
+            # init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
+            init_moved_xy = self.find_point(self.init_point[0:2], '十字搜索')
+            # init_moved_xy = self.find_point(self.init_point[0:2], '粗细搜索')
+            # init_moved_xy = self.find_point(self.init_point[0:2], '粗细十字搜索')
             # init_moved_xy = self.find_point(self.init_point[0:2], '手动给定')
+            end = time.perf_counter()
+            # 所用时间
+            Duration =(end - start)
         else:
-            init_moved_xy = self.find_point(self.init_point[0:2], 'traverse')
+            init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
 
         self.init_disp = init_moved_xy - self.init_point[0:2]
 
@@ -147,14 +154,10 @@ class DIC:
         # disp, ZNCC, iter_num = self.dic_match(p, out_points)
         disp, ZNCC, iter_num = self.dic_match_reliability_guide(p, out_points)
 
-        '''
-        打印应变图
-        '''
-
         return disp, ZNCC, iter_num
 
     def find_point(self, ref_point, method):
-        if method == 'traverse':
+        if method == '逐点搜素':
             subsize = self.subset_size
             ref_point = ref_point.astype('int64')
             sizeX = self.sizeX
@@ -232,6 +235,61 @@ class DIC:
 
             max_xy = all_xy[np.nanargmin(Cznssd)]
 
+        elif method == '粗细十字搜索':
+            subset_size = self.subset_size
+            half_subset = int((subset_size - 1) / 2)
+            ref_point = ref_point.astype('int64')
+            fSubset = ref_img[ref_point[0] - half_subset:ref_point[0] + half_subset + 1,
+                      ref_point[1] - half_subset:ref_point[1] + half_subset + 1]
+            deltafVec = fSubset - np.mean(fSubset)
+            deltaf = np.sqrt(np.sum(deltafVec ** 2))
+            sizeX = self.sizeX
+            sizeY = self.sizeY
+            x = np.arange(0, sizeX - subset_size + 1, 4) + subset_size // 2
+            y = np.arange(0, sizeY - subset_size + 1, 4) + subset_size // 2
+            X, Y = np.meshgrid(x, y)
+            # 所有位移后的点的坐标
+            all_xy = np.vstack((X.flatten('F'), Y.flatten('F'))).T.astype('int32')
+            Cznssd = np.zeros(len(all_xy))
+            for i in range(len(all_xy)):
+                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                                  all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
+                deltagVec = current_gSubset - np.mean(current_gSubset)
+                deltag = np.sqrt(np.sum(deltagVec ** 2))
+                Cznssd[i] = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
+
+            xy_1 = all_xy[np.nanargmin(Cznssd)]
+            min_Cznssd = 4
+            max_x = xy_1[0]
+            max_y = xy_1[1]
+            old_x = None
+            old_y = None
+            while True:
+                for x in range(7):
+                    x = x + max_x-half_subset-3
+                    current_gSubset = self.tar_img[x:x + subset_size, max_y - half_subset:max_y + half_subset + 1]
+                    deltagVec = current_gSubset - np.mean(current_gSubset)
+                    deltag = np.sqrt(np.sum(deltagVec ** 2))
+                    Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
+                    if Cznssd < min_Cznssd:
+                        min_Cznssd = Cznssd
+                        max_x = x + half_subset
+                for y in range(7):
+                    y = y + max_y-half_subset-3
+                    current_gSubset = self.tar_img[max_x - half_subset:max_x + half_subset + 1, y:y + subset_size]
+                    deltagVec = current_gSubset - np.mean(current_gSubset)
+                    deltag = np.sqrt(np.sum(deltagVec ** 2))
+                    Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
+                    if Cznssd < min_Cznssd:
+                        min_Cznssd = Cznssd
+                        max_y = y + half_subset
+                if old_x == max_x and old_y == max_y:
+                    break
+                old_x = max_x
+                old_y = max_y
+
+            max_xy = np.array([max_x, max_y])
+
         elif method == 'GA':
             '''
             这个方法不是很靠谱
@@ -242,13 +300,14 @@ class DIC:
             max_xy = find_point_GA.run(self.ref_img, self.tar_img, self.subset_size, ref_point, sizeX, sizeY)
 
         elif method == 'GA-cross':
-            a=1
+            sizeX = self.sizeX
+            sizeY = self.sizeY
+            ref_point = ref_point.astype('int64')
+            max_xy = find_point_GA.cross_run(self.ref_img, self.tar_img, self.subset_size, ref_point, sizeX, sizeY)
 
         elif method == '十字搜索':
-            '''
-            这个方法问题很大
-            '''
             subsize = self.subset_size
+            half_subset = subsize // 2
             ref_point = ref_point.astype('int64')
             sizeX = self.sizeX
             sizeY = self.sizeY
@@ -264,21 +323,21 @@ class DIC:
             old_y = None
             while True:
                 for x in range(sizeX - subsize + 1):
-                    current_gSubset = self.tar_img[x:x + subsize, max_y:max_y + subsize]
+                    current_gSubset = self.tar_img[x:x + subsize, max_y-half_subset:max_y + half_subset+1]
                     deltagVec = current_gSubset - np.mean(current_gSubset)
                     deltag = np.sqrt(np.sum(deltagVec ** 2))
                     Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
                     if Cznssd < min_Cznssd:
                         min_Cznssd = Cznssd
-                        max_x = x
+                        max_x = x + half_subset
                 for y in range(sizeY - subsize + 1):
-                    current_gSubset = self.tar_img[max_x:max_x + subsize, y:y + subsize]
+                    current_gSubset = self.tar_img[max_x-half_subset:max_x + half_subset+1, y:y + subsize]
                     deltagVec = current_gSubset - np.mean(current_gSubset)
                     deltag = np.sqrt(np.sum(deltagVec ** 2))
                     Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
                     if Cznssd < min_Cznssd:
                         min_Cznssd = Cznssd
-                        max_y = y
+                        max_y = y + half_subset
                 if old_x == max_x and old_y == max_y:
                     break
                 old_x = max_x
@@ -653,10 +712,10 @@ if __name__ == '__main__':
     # tar_img = imread(
     #     'D:\桌面\毕设\别人代码\DIC_ICLM_MATLAB-master\DIC_ICLM_MATLAB-master\Sample Image\Int translation\img_00303.bmp', '0')
     # ref_img = imread(
-    #     'D:/桌面/毕设/pictures/2_0.bmp', '0')
+    #     'D:/桌面/毕设/pictures/3_0.bmp', '0')
     # ref_img = cv.cvtColor(ref_img, cv.COLOR_BGR2GRAY)
     # tar_img = imread(
-    #     'D:/桌面/毕设/pictures/2_1.bmp', '0')
+    #     'D:/桌面/毕设/pictures/3_1.bmp', '0')
     # tar_img = cv.cvtColor(tar_img, cv.COLOR_BGR2GRAY)
 
     ref_img_dict = ['data/x y方向位移虚拟散斑/15.23pix-y方向位移/ImgSpeck1.bmp',
@@ -664,8 +723,8 @@ if __name__ == '__main__':
     tar_img_dict = ['data/x y方向位移虚拟散斑/15.23pix-y方向位移/ImgSpeck2.bmp',
                     'data/x y方向位移虚拟散斑/18.23pix-y方向 15.8pix-x方向/ImgSpeck2.bmp']
 
-    ref_img = imread(ref_img_dict[0], '0')
-    tar_img = imread(tar_img_dict[0], '0')
+    ref_img = imread(ref_img_dict[1], '0')
+    tar_img = imread(tar_img_dict[1], '0')
 
     dic = DIC(ref_img, tar_img)
     dic.set_parameters()
