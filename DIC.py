@@ -13,15 +13,17 @@ class DIC:
     def __init__(self, ref_img, tar_img, debug=False):
         self.ref_img = ref_img
         self.tar_img = tar_img
-        # 是否自动选取区域
+        # 是否自动选取区域,自动选取起始点
         self.ifauto = 1
         self.sizeX = np.size(ref_img, 0)
         self.sizeY = np.size(ref_img, 1)
         self.debug = debug
 
-    def set_parameters(self, subset_size: int = 31):
+    def set_parameters(self, *, subset_size=31, step=5, int_pixel_method='粗细十字搜索', sub_pixel_method='IC-GN'):
         self.subset_size = subset_size
-        self.step = 5
+        self.step = step
+        self.int_pixel_method = int_pixel_method
+        self.sub_pixel_method = sub_pixel_method
         # 迭代停止条件
         self.thre = 1e-3
         # 为1则进行归一化，为0则不进行归一化
@@ -36,9 +38,11 @@ class DIC:
         self.localSubHom = np.concatenate(
             (deltax.reshape(1, -1), deltay.reshape(1, -1), np.ones((1, subset_size * subset_size))), axis=0)
         self.localSub = self.localSubHom[0:2].T
-        self.sub_pixel_method = 'IC-GN'
 
-    def calculate_points(self):
+    def calculate_points(self, fig, ax):
+        # fig在整像素搜索手动给定是时候要用
+        self.fig = fig
+
         half_subset = self.half_subset
         step = self.step
         x = np.zeros(2)
@@ -49,26 +53,24 @@ class DIC:
             y = [100, self.sizeY - 100]
         else:
             # 手动给定
-            temp = plt.ginput(1)
+            temp = fig.ginput(1)
             y[0] = temp[0][0]
             x[0] = temp[0][1]
-            plt.plot(y[0], x[0], '+r', 8)
-            plt.show()
-            temp = plt.ginput(1)
+            ax.plot(y[0], x[0], '+r', 8)
+            temp = fig.ginput(1)
             y[1] = temp[0][0]
             x[1] = temp[0][1]
-            plt.plot(y[1], x[1], '+r', 8)
-            plt.show()
+            ax.plot(y[1], x[1], '+r', 8)
 
         x = np.round(x)
         y = np.round(y)
         xROI = np.sort(x)
         yROI = np.sort(y)
 
-        plt.plot([yROI[0], yROI[0]], [xROI[0], xROI[1]], '-r', 1)
-        plt.plot([yROI[1], yROI[1]], [xROI[0], xROI[1]], '-r', 1)
-        plt.plot([yROI[0], yROI[1]], [xROI[0], xROI[0]], '-r', 1)
-        plt.plot([yROI[0], yROI[1]], [xROI[1], xROI[1]], '-r', 1)
+        ax.plot([yROI[0], yROI[0]], [xROI[0], xROI[1]], '-r', 1)
+        ax.plot([yROI[1], yROI[1]], [xROI[0], xROI[1]], '-r', 1)
+        ax.plot([yROI[0], yROI[1]], [xROI[0], xROI[0]], '-r', 1)
+        ax.plot([yROI[0], yROI[1]], [xROI[1], xROI[1]], '-r', 1)
 
         '''
         按步长生成空间等步长的计算点
@@ -95,15 +97,14 @@ class DIC:
             self.init_point = np.concatenate((PMeshX.reshape(-1, 1)[index], PMeshY.reshape(-1, 1)[index], [1]), axis=0)
         else:
             # 手动选择初始点
-            temp = plt.ginput(1)
+            temp = fig.ginput(1)
             x = temp[0][1]
             y = temp[0][0]
             dist = np.sqrt(np.square(PMeshX.reshape(-1, 1) - x) + np.square(PMeshY.reshape(-1, 1) - y))
             index = np.argmin(dist)
             self.init_point = np.concatenate((PMeshX.reshape(-1, 1)[index], PMeshY.reshape(-1, 1)[index], [1]), axis=0)
 
-        plt.plot(self.init_point[1], self.init_point[0], 'r*', 12)
-        plt.show()
+        ax.plot(self.init_point[1], self.init_point[0], 'r*', 12)
 
         self.index_init_point = index
         self.num_cal_points = self.Lx * self.Ly
@@ -127,18 +128,15 @@ class DIC:
         if self.ifauto:
             # 自动的话就假设整像素位移为0
             # init_moved_xy = self.init_point[0:2]
-            start = time.perf_counter()
             # init_moved_xy = self.find_point(self.init_point[0:2], 'GA')
             # init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
-            init_moved_xy = self.find_point(self.init_point[0:2], '十字搜索')
+            # init_moved_xy = self.find_point(self.init_point[0:2], '十字搜索')
             # init_moved_xy = self.find_point(self.init_point[0:2], '粗细搜索')
-            # init_moved_xy = self.find_point(self.init_point[0:2], '粗细十字搜索')
+            init_moved_xy = self.find_point(self.init_point[0:2], self.int_pixel_method)
             # init_moved_xy = self.find_point(self.init_point[0:2], '手动给定')
-            end = time.perf_counter()
-            # 所用时间
-            Duration =(end - start)
         else:
-            init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
+            # init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
+            init_moved_xy = self.find_point(self.init_point[0:2], self.int_pixel_method)
 
         self.init_disp = init_moved_xy - self.init_point[0:2]
 
@@ -191,7 +189,7 @@ class DIC:
             half_subset = int((subset_size - 1) / 2)
             ref_point = ref_point.astype('int64')
 
-            fSubset = ref_img[ref_point[0] - half_subset:ref_point[0] + half_subset + 1,
+            fSubset = self.ref_img[ref_point[0] - half_subset:ref_point[0] + half_subset + 1,
                       ref_point[1] - half_subset:ref_point[1] + half_subset + 1]
             deltafVec = fSubset - np.mean(fSubset)
             deltaf = np.sqrt(np.sum(deltafVec ** 2))
@@ -205,7 +203,7 @@ class DIC:
             all_xy = np.vstack((X.flatten('F'), Y.flatten('F'))).T.astype('int32')
             Cznssd = np.zeros(len(all_xy))
             for i in range(len(all_xy)):
-                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                current_gSubset = self.tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
                                   all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
                 deltagVec = current_gSubset - np.mean(current_gSubset)
                 deltag = np.sqrt(np.sum(deltagVec ** 2))
@@ -216,7 +214,7 @@ class DIC:
 
             Cznssd = np.zeros(len(all_xy))
             for i in range(len(all_xy)):
-                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                current_gSubset = self.tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
                                   all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
                 deltagVec = current_gSubset - np.mean(current_gSubset)
                 deltag = np.sqrt(np.sum(deltagVec ** 2))
@@ -227,7 +225,7 @@ class DIC:
 
             Cznssd = np.zeros(len(all_xy))
             for i in range(len(all_xy)):
-                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                current_gSubset = self.tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
                                   all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
                 deltagVec = current_gSubset - np.mean(current_gSubset)
                 deltag = np.sqrt(np.sum(deltagVec ** 2))
@@ -239,7 +237,7 @@ class DIC:
             subset_size = self.subset_size
             half_subset = int((subset_size - 1) / 2)
             ref_point = ref_point.astype('int64')
-            fSubset = ref_img[ref_point[0] - half_subset:ref_point[0] + half_subset + 1,
+            fSubset = self.ref_img[ref_point[0] - half_subset:ref_point[0] + half_subset + 1,
                       ref_point[1] - half_subset:ref_point[1] + half_subset + 1]
             deltafVec = fSubset - np.mean(fSubset)
             deltaf = np.sqrt(np.sum(deltafVec ** 2))
@@ -252,7 +250,7 @@ class DIC:
             all_xy = np.vstack((X.flatten('F'), Y.flatten('F'))).T.astype('int32')
             Cznssd = np.zeros(len(all_xy))
             for i in range(len(all_xy)):
-                current_gSubset = tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
+                current_gSubset = self.tar_img[all_xy[i, 0] - half_subset:all_xy[i, 0] + half_subset + 1,
                                   all_xy[i, 1] - half_subset:all_xy[i, 1] + half_subset + 1]
                 deltagVec = current_gSubset - np.mean(current_gSubset)
                 deltag = np.sqrt(np.sum(deltagVec ** 2))
@@ -266,7 +264,7 @@ class DIC:
             old_y = None
             while True:
                 for x in range(7):
-                    x = x + max_x-half_subset-3
+                    x = x + max_x - half_subset - 3
                     current_gSubset = self.tar_img[x:x + subset_size, max_y - half_subset:max_y + half_subset + 1]
                     deltagVec = current_gSubset - np.mean(current_gSubset)
                     deltag = np.sqrt(np.sum(deltagVec ** 2))
@@ -275,7 +273,7 @@ class DIC:
                         min_Cznssd = Cznssd
                         max_x = x + half_subset
                 for y in range(7):
-                    y = y + max_y-half_subset-3
+                    y = y + max_y - half_subset - 3
                     current_gSubset = self.tar_img[max_x - half_subset:max_x + half_subset + 1, y:y + subset_size]
                     deltagVec = current_gSubset - np.mean(current_gSubset)
                     deltag = np.sqrt(np.sum(deltagVec ** 2))
@@ -323,7 +321,7 @@ class DIC:
             old_y = None
             while True:
                 for x in range(sizeX - subsize + 1):
-                    current_gSubset = self.tar_img[x:x + subsize, max_y-half_subset:max_y + half_subset+1]
+                    current_gSubset = self.tar_img[x:x + subsize, max_y - half_subset:max_y + half_subset + 1]
                     deltagVec = current_gSubset - np.mean(current_gSubset)
                     deltag = np.sqrt(np.sum(deltagVec ** 2))
                     Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
@@ -331,7 +329,7 @@ class DIC:
                         min_Cznssd = Cznssd
                         max_x = x + half_subset
                 for y in range(sizeY - subsize + 1):
-                    current_gSubset = self.tar_img[max_x-half_subset:max_x + half_subset+1, y:y + subsize]
+                    current_gSubset = self.tar_img[max_x - half_subset:max_x + half_subset + 1, y:y + subsize]
                     deltagVec = current_gSubset - np.mean(current_gSubset)
                     deltag = np.sqrt(np.sum(deltagVec ** 2))
                     Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
@@ -349,7 +347,7 @@ class DIC:
             '''
             会在手动给定的点周围31*31位移范围进行搜索
             '''
-            temp = plt.ginput(1)
+            temp = self.fig.ginput(1)
             y = temp[0][0]
             x = temp[0][1]
             x = int(x)
@@ -729,16 +727,14 @@ if __name__ == '__main__':
     dic = DIC(ref_img, tar_img)
     dic.set_parameters()
 
-    plt.subplot(221)
-    plt.title('reference img')
-    plt.imshow(ref_img, cmap='gray')
+    fig, ax = plt.subplots(2, 2)
+    ax[0, 0].set_title('reference img')
+    ax[0, 0].imshow(ref_img, cmap='gray')
+    ax[0, 1].set_title('target img')
+    ax[0, 1].imshow(tar_img, cmap='gray')
 
     # 在参考图像上选择计算点
-    dic.calculate_points()
-
-    plt.subplot(222)
-    plt.title('target img')
-    plt.imshow(tar_img, cmap='gray')
+    dic.calculate_points(fig, ax[0, 0])
 
     result = dic.start()
 
@@ -749,16 +745,15 @@ if __name__ == '__main__':
     y = xy[:, 1]
     y = y.reshape(dic.Lx, dic.Ly)
     temp = 5  # 控制刻度
-    plt.subplot(223)
-    plt.title('X displacement')
-    plt.imshow(x, cmap='nipy_spectral')
-    plt.colorbar()
-    plt.xticks(np.arange(0, dic.Ly, temp), np.arange(0, dic.Ly * dic.step, temp * dic.step))
-    plt.yticks(np.arange(0, dic.Lx, temp), np.arange(0, dic.Lx * dic.step, temp * dic.step))
 
-    plt.subplot(224)
-    plt.title('Y displacement')
-    plt.imshow(y, cmap='nipy_spectral')
-    plt.colorbar()
-    plt.xticks(np.arange(0, dic.Ly, temp), np.arange(0, dic.Ly * dic.step, temp * dic.step))
-    plt.yticks(np.arange(0, dic.Lx, temp), np.arange(0, dic.Lx * dic.step, temp * dic.step))
+    ax[1, 0].set_title('X displacement')
+    A = ax[1, 0].imshow(x, cmap='nipy_spectral')
+    fig.colorbar(A, ax=ax[1, 0])
+    ax[1, 0].set_xticks(np.arange(0, dic.Ly, temp), np.arange(0, dic.Ly * dic.step, temp * dic.step))
+    ax[1, 0].set_yticks(np.arange(0, dic.Lx, temp), np.arange(0, dic.Lx * dic.step, temp * dic.step))
+
+    ax[1, 1].set_title('Y displacement')
+    B = ax[1, 1].imshow(y, cmap='nipy_spectral')
+    fig.colorbar(B, ax=ax[1, 1])
+    ax[1, 1].set_xticks(np.arange(0, dic.Ly, temp), np.arange(0, dic.Ly * dic.step, temp * dic.step))
+    ax[1, 1].set_yticks(np.arange(0, dic.Lx, temp), np.arange(0, dic.Lx * dic.step, temp * dic.step))

@@ -255,7 +255,7 @@ if __name__ == '__main__':
     Pc = 0.8
     # Pc_max = 0.9
     # Pc_min = 0.6
-    Pm = 0.02
+    Pm = 0.01
     # Pm_max = 0.1
     # Pm_min = 0.01
     M = 500
@@ -273,7 +273,6 @@ if __name__ == '__main__':
 
     max_fitness = 0
     for m in range(M):
-        print(m)
         '''
         适应度计算
         有时group_xy坐标会小于15,所以消灭x,y不在50~250之间的个体
@@ -388,42 +387,9 @@ if __name__ == '__main__':
 
         group_xy = decode(new_group_01, 8)
         # print(max_xy)
-    print(max_xy)
 
-    # min_Cznssd = 4
-    # max_x = max_xy[0]
-    # max_y = max_xy[1]
-    # half_subset = subsize // 2
-    # # deltaVecX = np.arange(-half_subset, half_subset + 1)
-    # # deltaVecY = np.arange(-half_subset, half_subset + 1)
-    # old_x = None
-    # old_y = None
-    # while True:
-    #     for x in range(200 - subsize + 1):
-    #         current_gSubset = tar_img[x:x + subsize, max_y - half_subset:max_y + half_subset + 1]
-    #         deltagVec = current_gSubset - np.mean(current_gSubset)
-    #         deltag = np.sqrt(np.sum(deltagVec ** 2))
-    #         Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
-    #         if Cznssd < min_Cznssd:
-    #             min_Cznssd = Cznssd
-    #             max_x = x + half_subset
-    #
-    #     for y in range(200 - subsize + 1):
-    #         current_gSubset = tar_img[max_x - half_subset:max_x + half_subset + 1, y:y + subsize]
-    #         deltagVec = current_gSubset - np.mean(current_gSubset)
-    #         deltag = np.sqrt(np.sum(deltagVec ** 2))
-    #         Cznssd = sum(sum((deltafVec / deltaf - deltagVec / deltag) ** 2))
-    #         if Cznssd < min_Cznssd:
-    #             min_Cznssd = Cznssd
-    #             max_y = y + half_subset
-    #
-    #     if old_x == max_x and old_y == max_y:
-    #         break
-    #     old_x = max_x
-    #     old_y = max_y
-    #
-    # new_max_xy = np.array([max_x, max_y])
-
+    plt.rcParams["font.sans-serif"] = ["SimHei"]  # 设置字体
+    plt.rcParams["axes.unicode_minus"] = False  # 正常显示负号
     M_X = np.arange(M)
     plt.figure(1)
     plt.plot(M_X, plt_max_fit)
