@@ -13,13 +13,13 @@ class DIC:
     def __init__(self, ref_img, tar_img, debug=False):
         self.ref_img = ref_img
         self.tar_img = tar_img
-        # 是否自动选取区域,自动选取起始点
-        self.ifauto = 1
         self.sizeX = np.size(ref_img, 0)
         self.sizeY = np.size(ref_img, 1)
         self.debug = debug
 
-    def set_parameters(self, *, subset_size=31, step=5, int_pixel_method='粗细十字搜索', sub_pixel_method='IC-GN'):
+    def set_parameters(self, *, subset_size=31, step=5, int_pixel_method='粗细十字搜索', sub_pixel_method='IC-GN', ifauto=1):
+        # 是否自动选取区域,自动选取起始点
+        self.ifauto = ifauto
         self.subset_size = subset_size
         self.step = step
         self.int_pixel_method = int_pixel_method
@@ -126,13 +126,13 @@ class DIC:
         self.grad_ref_img()
         # 计算初始种子点的位移init_disp
         if self.ifauto:
-            # 自动的话就假设整像素位移为0
-            # init_moved_xy = self.init_point[0:2]
+            # 给定假设整像素位移为0
+            init_moved_xy = self.init_point[0:2]
             # init_moved_xy = self.find_point(self.init_point[0:2], 'GA')
             # init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
             # init_moved_xy = self.find_point(self.init_point[0:2], '十字搜索')
             # init_moved_xy = self.find_point(self.init_point[0:2], '粗细搜索')
-            init_moved_xy = self.find_point(self.init_point[0:2], self.int_pixel_method)
+            # init_moved_xy = self.find_point(self.init_point[0:2], self.int_pixel_method)
             # init_moved_xy = self.find_point(self.init_point[0:2], '手动给定')
         else:
             # init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
@@ -155,7 +155,7 @@ class DIC:
         return disp, ZNCC, iter_num
 
     def find_point(self, ref_point, method):
-        if method == '逐点搜素':
+        if method == '逐点搜索':
             subsize = self.subset_size
             ref_point = ref_point.astype('int64')
             sizeX = self.sizeX
@@ -289,9 +289,6 @@ class DIC:
             max_xy = np.array([max_x, max_y])
 
         elif method == 'GA':
-            '''
-            这个方法不是很靠谱
-            '''
             sizeX = self.sizeX
             sizeY = self.sizeY
             ref_point = ref_point.astype('int64')
@@ -723,6 +720,7 @@ if __name__ == '__main__':
 
     ref_img = imread(ref_img_dict[1], '0')
     tar_img = imread(tar_img_dict[1], '0')
+
 
     dic = DIC(ref_img, tar_img)
     dic.set_parameters()
