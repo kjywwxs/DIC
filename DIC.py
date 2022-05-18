@@ -124,18 +124,11 @@ class DIC:
             self.tar_img = self.tar_img / (np.max(abs(self.tar_img)))
         # 计算一次参考图像的梯度
         self.grad_ref_img()
+
         # 计算初始种子点的位移init_disp
         if self.ifauto:
-            # 给定假设整像素位移为0
-            init_moved_xy = self.init_point[0:2]
-            # init_moved_xy = self.find_point(self.init_point[0:2], 'GA')
-            # init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
-            # init_moved_xy = self.find_point(self.init_point[0:2], '十字搜索')
-            # init_moved_xy = self.find_point(self.init_point[0:2], '粗细搜索')
-            # init_moved_xy = self.find_point(self.init_point[0:2], self.int_pixel_method)
-            # init_moved_xy = self.find_point(self.init_point[0:2], '手动给定')
+            init_moved_xy = self.find_point(self.init_point[0:2], self.int_pixel_method)
         else:
-            # init_moved_xy = self.find_point(self.init_point[0:2], '逐点搜素')
             init_moved_xy = self.find_point(self.init_point[0:2], self.int_pixel_method)
 
         self.init_disp = init_moved_xy - self.init_point[0:2]
@@ -155,7 +148,9 @@ class DIC:
         return disp, ZNCC, iter_num
 
     def find_point(self, ref_point, method):
-        if method == '逐点搜索':
+        if method == '给定为零':
+            max_xy = ref_point
+        elif method == '逐点搜索':
             subsize = self.subset_size
             ref_point = ref_point.astype('int64')
             sizeX = self.sizeX
@@ -702,16 +697,6 @@ class DIC:
 
 
 if __name__ == '__main__':
-    # ref_img = imread(
-    #     'D:\桌面\毕设\别人代码\DIC_ICLM_MATLAB-master\DIC_ICLM_MATLAB-master\Sample Image\Int translation\img_00000.bmp', '0')
-    # tar_img = imread(
-    #     'D:\桌面\毕设\别人代码\DIC_ICLM_MATLAB-master\DIC_ICLM_MATLAB-master\Sample Image\Int translation\img_00303.bmp', '0')
-    # ref_img = imread(
-    #     'D:/桌面/毕设/pictures/3_0.bmp', '0')
-    # ref_img = cv.cvtColor(ref_img, cv.COLOR_BGR2GRAY)
-    # tar_img = imread(
-    #     'D:/桌面/毕设/pictures/3_1.bmp', '0')
-    # tar_img = cv.cvtColor(tar_img, cv.COLOR_BGR2GRAY)
 
     ref_img_dict = ['data/x y方向位移虚拟散斑/15.23pix-y方向位移/ImgSpeck1.bmp',
                     'data/x y方向位移虚拟散斑/18.23pix-y方向 15.8pix-x方向/ImgSpeck1.bmp']
