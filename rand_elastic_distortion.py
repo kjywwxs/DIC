@@ -43,7 +43,7 @@ def elastic_transform(image, alpha, sigma,
     # bilinear interpolation
     imageC = map_coordinates(imageB, indices, order=1, mode='constant').reshape(shape)
 
-    return imageC, dx, dy, M
+    return imageC, M, dx, dy
 
 
 if __name__ == '__main__':
@@ -52,11 +52,11 @@ if __name__ == '__main__':
     img_show = imageA.copy()
     imageA = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
     # 施加随机变形
-    imageC, dx, dy, M = elastic_transform(imageA,
-                                       imageA.shape[1] * 0.5,
-                                       imageA.shape[1] * 0.08,
-                                       imageA.shape[1] * 0.08,
-                                       np.random.RandomState(1))
+    imageC, M, dx, dy = elastic_transform(imageA,
+                                                         imageA.shape[1] * 0.5,
+                                                         imageA.shape[1] * 0.08,
+                                                         imageA.shape[1] * 0.08,
+                                                         np.random.RandomState(1))
 
     cv2.namedWindow("img_a", 0)
     cv2.imshow("img_a", img_show)

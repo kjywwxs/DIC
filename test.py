@@ -12,7 +12,7 @@ from rand_elastic_distortion import elastic_transform
 
 
 def add_light(img):
-    # 给图像施加不均匀光照，输入为np数组的二维图片
+    '''给图像施加不均匀光照，输入为np数组的二维图片'''
     X = np.size(img, 0)
     Y = np.size(img, 1)
     strength = 20  # 设置光照强度
@@ -129,7 +129,6 @@ def cal_err_sd(xy_disp, ref_pt, def_type):
         x_moved = ref_pt[:, 0]
         y_moved = calpt_gaosi_v(ref_pt[:, 1])
     else:
-        '''???'''
         xy_moved = calpt_xuanzhuan(ref_pt)
         x_moved = xy_moved[:, 0]
         y_moved = xy_moved[:, 1]
@@ -152,41 +151,35 @@ if __name__ == '__main__':
                     'mydata/正弦/a1T50_1.bmp',
                     'mydata/高斯/a1c15_1.bmp',
                     'mydata/旋转/10度_1.bmp']
-
     # 0：平移，1：压缩，2：正弦，3：高斯，4：旋转
     def_type = 0
-
     ref_img = imread('mydata/平移/Y1_6_0.bmp', '0')
-    tar_img = imread('mydata/平移/Y1_6_1.bmp', '0')
-    # tar_img, dx, dy, M = elastic_transform(ref_img,
-    #                                        ref_img.shape[1] * 0.1,
-    #                                        ref_img.shape[1] * 0.08,
-    #                                        ref_img.shape[1] * 0.08,
-    #                                        np.random.RandomState(2))
     if len(ref_img.shape) == 3:
         ref_img = ref_img.mean(axis=-1)
+    # tar_img = imread('mydata/平移/Y1_6_1.bmp', '0')
+    tar_img, M, dx, dy = elastic_transform(ref_img,
+                                           ref_img.shape[1] * 0.32,
+                                           ref_img.shape[1] * 0.08,
+                                           ref_img.shape[1] * 0.01,
+                                           np.random.RandomState())
     if len(tar_img.shape) == 3:
         tar_img = tar_img.mean(axis=-1)
 
-    # ref_img = add_light(ref_img)  # 施加光照
-    # tar_img = add_light(tar_img)  # 施加光照
-
-    ref_img = add_noise(ref_img)  # 施加噪声
-    tar_img = add_noise(tar_img)  # 施加噪声
-    ref_img = cv.GaussianBlur(ref_img, (3, 3), 1)  # 高斯滤波
-    tar_img = cv.GaussianBlur(tar_img, (3, 3), 1)  # 高斯滤波
+    # ref_img = add_noise(ref_img, mean=0, var=0.001)  # 施加噪声
+    # tar_img = add_noise(tar_img, mean=0, var=0.001)  # 施加噪声
+    # ref_img = cv.GaussianBlur(ref_img, (3, 3), 1)  # 高斯滤波
+    # tar_img = cv.GaussianBlur(tar_img, (3, 3), 1)  # 高斯滤波
 
     dic = DIC(ref_img, tar_img)
-
     # int_pixel_method：给定为零；逐点搜索；十字搜索；粗细十字搜索；GA;手动给定
     params = {'subset_size': 31,
               'step': 1,
               'int_pixel_method': '逐点搜索',
-              'sub_pixel_method': 'IC-GN',
+              'sub_pixel_method': 'IC-GN2',
               'ifauto': 1
               }
     dic.set_parameters(**params)
-
+    # 绘制参考图像和目标图像
     fig, ax = plt.subplots(2, 2)
     fig.set_size_inches(9, 7)
     ax[0, 0].set_title('reference img')
@@ -195,22 +188,29 @@ if __name__ == '__main__':
     ax[0, 1].imshow(tar_img, cmap='gray')
     # 在参考图像上选择计算点
     dic.calculate_points(fig, ax[0, 0])
-
     result = dic.start()
 
-    # 计算误差
+    # # 计算误差
     cal_points = dic.cal_points
-    x_err, x_sd, y_err, y_sd = cal_err_sd(result[0], cal_points, def_type)
+    # x_err, x_sd, y_err, y_sd = cal_err_sd(result[0], cal_points, def_type)
 
-    # # 随机弹性形变计算误差 不太对
-    # fangshehou = (M[:, 0:2] @ cal_points.T + M[:, 2].reshape(2, 1))
-    # cal_dx = dx[dic.cal_pointsX][:, dic.cal_pointsY].flatten()
-    # cal_dy = dy[dic.cal_pointsX][:, dic.cal_pointsY].flatten()
-    # xy_moved = (fangshehou + np.vstack((cal_dx, cal_dy))).T
-    # x_c = cal_points[:, 0] + result[0][:, 0]
-    # y_c = cal_points[:, 1] + result[0][:, 1]
-    # x_err = x_c - xy_moved[:, 0]
-    # y_err = y_c - xy_moved[:, 1]
+    # 计算随机弹性形变误差 坐标系不太一样，有点晕
+    cal_points[:, [0, 1]] = cal_points[:, [1, 0]]
+    fangshehou = (M[:, 0:2] @ cal_points.T + M[:, 2].reshape(2, 1)).T
+    fangshehou[:, [0, 1]] = fangshehou[:, [1, 0]]
+
+    cal_dy = dx[dic.cal_pointsX][:, dic.cal_pointsY].flatten()
+    cal_dx = dy[dic.cal_pointsX][:, dic.cal_pointsY].flatten()
+    xy_moved = fangshehou + np.vstack((cal_dx, cal_dy)).T
+
+    cal_points[:, [0, 1]] = cal_points[:, [1, 0]]
+    x_c = cal_points[:, 0] + result[0][:, 0]
+    y_c = cal_points[:, 1] + result[0][:, 1]
+
+    x_err = x_c - xy_moved[:, 0]
+    y_err = y_c - xy_moved[:, 1]
+    x_sd = math.sqrt(sum((result[0][:, 0] - result[0][:, 0].mean()) ** 2) / (len(result[0][:, 0]) - 1))
+    y_sd = math.sqrt(sum((result[0][:, 1] - result[0][:, 1].mean()) ** 2) / (len(result[0][:, 1]) - 1))
 
     # 绘制误差分布图
     x_err_plt = x_err.reshape(dic.Lx, dic.Ly)

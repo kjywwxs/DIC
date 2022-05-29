@@ -10,12 +10,11 @@ import find_point_GA
 
 class DIC:
 
-    def __init__(self, ref_img, tar_img, debug=False):
+    def __init__(self, ref_img, tar_img):
         self.ref_img = ref_img
         self.tar_img = tar_img
         self.sizeX = np.size(ref_img, 0)
         self.sizeY = np.size(ref_img, 1)
-        self.debug = debug
 
     def set_parameters(self, *, subset_size=31, step=5, int_pixel_method='粗细十字搜索', sub_pixel_method='IC-GN', ifauto=1):
         # 是否自动选取区域,自动选取起始点
@@ -39,14 +38,14 @@ class DIC:
             (deltax.reshape(1, -1), deltay.reshape(1, -1), np.ones((1, subset_size * subset_size))), axis=0)
         self.localSub = self.localSubHom[0:2].T
 
-    def calculate_points(self, fig, ax):
+    def calculate_points(self, fig=None, ax=None):
+        '''得到感兴趣区域的计算点'''
         # fig在整像素搜索手动给定是时候要用
         self.fig = fig
-
         half_subset = self.half_subset
         step = self.step
-        x = np.zeros(2)
-        y = np.zeros(2)
+        x = np.zeros(2).astype('int32')
+        y = np.zeros(2).astype('int32')
         if self.ifauto:
             # 预选取的感兴趣范围
             x = [100, self.sizeX - 100]
@@ -66,11 +65,11 @@ class DIC:
         y = np.round(y)
         xROI = np.sort(x)
         yROI = np.sort(y)
-
-        ax.plot([yROI[0], yROI[0]], [xROI[0], xROI[1]], '-r', 1)
-        ax.plot([yROI[1], yROI[1]], [xROI[0], xROI[1]], '-r', 1)
-        ax.plot([yROI[0], yROI[1]], [xROI[0], xROI[0]], '-r', 1)
-        ax.plot([yROI[0], yROI[1]], [xROI[1], xROI[1]], '-r', 1)
+        if ax:
+            ax.plot([yROI[0], yROI[0]], [xROI[0], xROI[1]], '-r', 1)
+            ax.plot([yROI[1], yROI[1]], [xROI[0], xROI[1]], '-r', 1)
+            ax.plot([yROI[0], yROI[1]], [xROI[0], xROI[0]], '-r', 1)
+            ax.plot([yROI[0], yROI[1]], [xROI[1], xROI[1]], '-r', 1)
 
         '''
         按步长生成空间等步长的计算点
@@ -84,7 +83,6 @@ class DIC:
         # 计算点坐标
         self.cal_points = np.concatenate(
             (PMeshX.reshape(-1, 1), PMeshY.reshape(-1, 1)), axis=1)
-
         '''
         初始点
         '''
@@ -104,12 +102,14 @@ class DIC:
             index = np.argmin(dist)
             self.init_point = np.concatenate((PMeshX.reshape(-1, 1)[index], PMeshY.reshape(-1, 1)[index], [1]), axis=0)
 
-        ax.plot(self.init_point[1], self.init_point[0], 'r*', 12)
+        if ax:
+            ax.plot(self.init_point[1], self.init_point[0], 'r*', 12)
 
         self.index_init_point = index
         self.num_cal_points = self.Lx * self.Ly
 
     def grad_ref_img(self):
+        '''计算灰度梯度'''
         hx = (np.array([1, -8, 0, 8, -1]) / 12).reshape(5, 1)
         hy = (np.array([1, -8, 0, 8, -1]) / 12).reshape(1, 5)
         self.gradx_img = scipy.signal.correlate2d(self.ref_img, hx, 'same')
@@ -403,8 +403,8 @@ class DIC:
 
         return disp, ZNCC, iter_num
 
-    # 按可靠性引导的路径进行计算
     def dic_match_reliability_guide(self, p, out_points):
+        '''按可靠性引导的路径进行计算'''
         Lx = self.Lx
         Ly = self.Ly
         cal_points = self.cal_points
@@ -476,15 +476,15 @@ class DIC:
 
         return disp, ZNCC, iter_num
 
-    # 根据参数中的sub_pixel_method进行不同的迭代
     def iter_control(self, pCoord, p):
+        '''根据参数中的sub_pixel_method进行不同的迭代'''
         if self.sub_pixel_method == 'IC-GN':
             return self.iter_ICGN(pCoord, p)
         elif self.sub_pixel_method == 'IC-GN2':
             return self.iter_ICGN2(pCoord, p)
 
-    # 单个点迭代
     def iter_ICGN(self, pCoord, p):
+        '''单个点迭代'''
         Iter = 0
         subset_size = self.subset_size
         localSubHom = self.localSubHom
@@ -563,8 +563,8 @@ class DIC:
 
         return p, Czncc, Iter, Disp
 
-    # 单个点迭代,二阶形函数
     def iter_ICGN2(self, pCoord, p):
+        '''单个点迭代,二阶形函数'''
         Iter = 0
         subset_size = self.subset_size
         localSubHom = self.localSubHom
@@ -697,7 +697,6 @@ class DIC:
 
 
 if __name__ == '__main__':
-
     ref_img_dict = ['data/x y方向位移虚拟散斑/15.23pix-y方向位移/ImgSpeck1.bmp',
                     'data/x y方向位移虚拟散斑/18.23pix-y方向 15.8pix-x方向/ImgSpeck1.bmp']
     tar_img_dict = ['data/x y方向位移虚拟散斑/15.23pix-y方向位移/ImgSpeck2.bmp',
@@ -705,7 +704,6 @@ if __name__ == '__main__':
 
     ref_img = imread(ref_img_dict[1], '0')
     tar_img = imread(tar_img_dict[1], '0')
-
 
     dic = DIC(ref_img, tar_img)
     dic.set_parameters()

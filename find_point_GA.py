@@ -5,8 +5,9 @@ import matplotlib.pyplot as plt
 import math
 
 
-# digits为需要转换成的二进制位数，一个坐标转2*digits位
+
 def encode(group_xy, digits):
+    # digits为需要转换成的二进制位数，一个坐标转2*digits位
     binary_repr_v = np.vectorize(np.binary_repr)
     temp = binary_repr_v(group_xy, digits)
     group_01 = np.zeros((len(group_xy), 2 * digits))
@@ -113,8 +114,8 @@ def run(ref_img, tar_img, subsize, ref_point, sizeX, sizeY):
     return max_xy
 
 
-# 十字搜索结合遗传算法
 def cross_run(ref_img, tar_img, subsize, ref_point, sizeX, sizeY):
+    # 十字搜索结合遗传算法
     fSubset = ref_img[(ref_point[0] - subsize // 2):(ref_point[0] + subsize // 2 + 1),
               (ref_point[1] - subsize // 2):(ref_point[1] + subsize // 2 + 1)]
     deltafVec = fSubset - np.mean(fSubset)
