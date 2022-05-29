@@ -5,7 +5,6 @@ from DIC import DIC
 import matplotlib.pyplot as plt
 from matplotlib.image import imread
 import numpy as np
-import time
 
 ref_img = imread(
     'mydata/平移/Y1_6_0.bmp', '0')
@@ -15,14 +14,6 @@ tar_img = imread(
     'mydata/平移/Y1_6_1.bmp', '0')
 if len(tar_img.shape) == 3:
     tar_img = tar_img.mean(axis=-1)
-
-# ref_img_dict = ['data/x y方向位移虚拟散斑/15.23pix-y方向位移/ImgSpeck1.bmp',
-#                 'data/x y方向位移虚拟散斑/18.23pix-y方向 15.8pix-x方向/ImgSpeck1.bmp',]
-# tar_img_dict = ['data/x y方向位移虚拟散斑/15.23pix-y方向位移/ImgSpeck2.bmp',
-#                 'data/x y方向位移虚拟散斑/18.23pix-y方向 15.8pix-x方向/ImgSpeck2.bmp',]
-
-# ref_img = imread(ref_img_dict[1], '0')
-# tar_img = imread(tar_img_dict[1], '0')
 
 dic = DIC(ref_img, tar_img)
 
